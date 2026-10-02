@@ -783,6 +783,8 @@ function smartAnalyze(){
 }
 const SMART_AI_CONFIG_KEY='atm_smart_ai_config';
 const SMART_AI_SESSION_KEY='atm_smart_ai_api_key';
+const SMART_AI_ACTIVE_API_KEY='atm_smart_ai_active_api';
+let smartAiSettings={apis:[],vision:true};
 function toggleAdminAiSettings(){
   const panel=document.getElementById('adminAiSettings');
   const open=panel.style.display!=='block';
@@ -790,33 +792,114 @@ function toggleAdminAiSettings(){
   document.getElementById('adminAiToggle').setAttribute('aria-expanded',String(open));
   if(open) loadAdminAiSettings();
 }
-function loadAdminAiSettings(){
+function smartNormalizeAiApis(apis){
+  return (Array.isArray(apis)?apis:[]).slice(0,10).map(api=>({
+    provider:api.provider==='claude'?'claude':'gemini',
+    model:String(api.model||''),
+    apiKey:String(api.apiKey||'')
+  }));
+}
+function smartReadLegacyAiSettings(){
   let config={};
-  try{config=JSON.parse(localStorage.getItem(SMART_AI_CONFIG_KEY)||'{}');}catch(e){}
-  document.getElementById('adminAiProvider').value=config.provider==='claude'?'claude':'gemini';
-  document.getElementById('adminAiModel').value=config.model||'';
-  document.getElementById('adminAiVision').checked=config.vision!==false;
-  document.getElementById('adminAiKey').value=sessionStorage.getItem(SMART_AI_SESSION_KEY)||'';
-  document.getElementById('adminAiStatus').textContent=sessionStorage.getItem(SMART_AI_SESSION_KEY)?'API key tersedia untuk sesi browser ini.':'API key belum disimpan.';
+  try{config=JSON.parse(localStorage.getItem(SMART_AI_CONFIG_KEY)||'{}');}catch(error){}
+  const apiKey=sessionStorage.getItem(SMART_AI_SESSION_KEY)||'';
+  return {apis:config.model&&apiKey?[{provider:config.provider,model:config.model,apiKey}]:[],vision:config.vision!==false};
 }
-function saveAdminAiSettings(){
-  if(!currentIsAdmin){alert('Hanya Admin yang dapat mengubah konfigurasi AI.');return;}
-  const provider=document.getElementById('adminAiProvider').value;
-  const model=document.getElementById('adminAiModel').value.trim();
-  const apiKey=document.getElementById('adminAiKey').value.trim();
-  if(!model||!apiKey){document.getElementById('adminAiStatus').textContent='Model ID dan API key wajib diisi.';return;}
+function smartRenderAdminAiApis(apis){
+  const list=document.getElementById('adminAiApiList');
+  list.replaceChildren();
+  apis.forEach((api,index)=>{
+    const row=document.createElement('div');
+    row.className='admin-ai-api-row';
+    row.style.cssText='display:grid;grid-template-columns:1fr 1fr 1.5fr auto;gap:8px;align-items:end;padding:10px 0;border-bottom:1px solid #C5D0F0';
+    const provider=document.createElement('select');
+    provider.setAttribute('aria-label',`Provider API ${index+1}`);
+    provider.style.cssText='width:100%;padding:9px 10px;border:1px solid #A8B8E8;border-radius:6px;background:#fff;color:#1A1F36;font-family:var(--ui-font)';
+    provider.innerHTML='<option value="gemini">Google Gemini</option><option value="claude">Anthropic Claude</option>';
+    provider.value=api.provider;
+    const model=document.createElement('input');
+    model.type='text';model.placeholder='Model ID';model.value=api.model;
+    model.setAttribute('aria-label',`Model ID API ${index+1}`);
+    model.style.cssText='width:100%;padding:9px 10px;border:1px solid #A8B8E8;border-radius:6px;font-family:var(--ui-font)';
+    const key=document.createElement('input');
+    key.type='password';key.autocomplete='new-password';key.placeholder='API key';key.value=api.apiKey;
+    key.setAttribute('aria-label',`API key ${index+1}`);
+    key.style.cssText='width:100%;padding:9px 10px;border:1px solid #A8B8E8;border-radius:6px;font-family:var(--ui-font)';
+    const remove=document.createElement('button');
+    remove.type='button';remove.textContent='Hapus';
+    remove.style.cssText='padding:8px 10px;border:1px solid #D32F2F;border-radius:6px;background:#fff;color:#D32F2F;font-size:11px;cursor:pointer';
+    remove.addEventListener('click',()=>{
+      const current=smartReadAdminAiForm();
+      current.apis.splice(index,1);
+      smartRenderAdminAiApis(current.apis);
+      document.getElementById('adminAiVision').checked=current.vision;
+    });
+    row.append(provider,model,key,remove);
+    list.appendChild(row);
+  });
+  document.getElementById('adminAiAddApiBtn').disabled=apis.length>=10;
+}
+function smartReadAdminAiForm(){
+  return {
+    apis:[...document.querySelectorAll('.admin-ai-api-row')].map(row=>({
+      provider:row.querySelector('select').value,
+      model:row.querySelectorAll('input')[0].value.trim(),
+      apiKey:row.querySelectorAll('input')[1].value.trim()
+    })),
+    vision:document.getElementById('adminAiVision').checked
+  };
+}
+function addAdminAiApi(){
+  const current=smartReadAdminAiForm();
+  if(current.apis.length>=10)return;
+  current.apis.push({provider:'gemini',model:'',apiKey:''});
+  smartRenderAdminAiApis(current.apis);
+  document.getElementById('adminAiVision').checked=current.vision;
+}
+async function loadAdminAiSettings(){
+  const status=document.getElementById('adminAiStatus');
+  status.textContent='Memuat konfigurasi API dari Firebase...';
   try{
-    localStorage.setItem(SMART_AI_CONFIG_KEY,JSON.stringify({provider,model,vision:document.getElementById('adminAiVision').checked}));
-    sessionStorage.setItem(SMART_AI_SESSION_KEY,apiKey);
-    document.getElementById('adminAiStatus').textContent='Konfigurasi tersimpan. API key akan dihapus saat sesi browser berakhir.';
-  }catch(error){document.getElementById('adminAiStatus').textContent='Gagal menyimpan konfigurasi di browser ini.';}
+    const saved=await window.__fb.getAiConfig();
+    smartAiSettings=saved?{apis:smartNormalizeAiApis(saved.apis),vision:saved.vision!==false}:smartReadLegacyAiSettings();
+    smartRenderAdminAiApis(smartAiSettings.apis);
+    document.getElementById('adminAiVision').checked=smartAiSettings.vision;
+    status.textContent=saved?'Konfigurasi API dimuat dari Firebase.':'Belum ada konfigurasi di Firebase. Simpan untuk mengaktifkan daftar API.';
+  }catch(error){
+    status.textContent=`Gagal memuat konfigurasi Firebase: ${error.message||'periksa koneksi dan Firestore Rules.'}`;
+  }
 }
-function clearAdminAiSettings(){
+async function saveAdminAiSettings(){
   if(!currentIsAdmin){alert('Hanya Admin yang dapat mengubah konfigurasi AI.');return;}
-  localStorage.removeItem(SMART_AI_CONFIG_KEY);
-  sessionStorage.removeItem(SMART_AI_SESSION_KEY);
-  document.getElementById('adminAiKey').value='';
-  document.getElementById('adminAiStatus').textContent='API key dan konfigurasi provider dihapus dari browser ini.';
+  const status=document.getElementById('adminAiStatus');
+  const settings=smartReadAdminAiForm();
+  if(!settings.apis.length||settings.apis.some(api=>!api.model||!api.apiKey)){
+    status.textContent='Tambahkan minimal satu API dan lengkapi Model ID serta API key setiap baris.';return;
+  }
+  if(settings.apis.length>10){status.textContent='Maksimal 10 API dapat disimpan.';return;}
+  if(!window.__fb){status.textContent='Firebase belum siap. Konfigurasi belum disimpan.';return;}
+  status.textContent='Menyimpan konfigurasi ke Firebase...';
+  try{
+    await window.__fb.saveAiConfig(settings);
+    smartAiSettings={apis:smartNormalizeAiApis(settings.apis),vision:settings.vision};
+    localStorage.removeItem(SMART_AI_CONFIG_KEY);
+    sessionStorage.removeItem(SMART_AI_SESSION_KEY);
+    status.textContent=`Berhasil menyimpan ${settings.apis.length} API ke Firebase.`;
+  }catch(error){status.textContent=`Gagal menyimpan ke Firebase: ${error.message||'periksa Firestore Rules dan koneksi.'}`;}
+}
+async function clearAdminAiSettings(){
+  if(!currentIsAdmin){alert('Hanya Admin yang dapat mengubah konfigurasi AI.');return;}
+  const status=document.getElementById('adminAiStatus');
+  try{
+    await window.__fb.deleteAiConfig();
+    smartAiSettings={apis:[],vision:true};
+    smartRenderAdminAiApis([]);
+    document.getElementById('adminAiVision').checked=true;
+    localStorage.removeItem(SMART_AI_CONFIG_KEY);
+    localStorage.removeItem(SMART_AI_ACTIVE_API_KEY);
+    sessionStorage.removeItem(SMART_AI_SESSION_KEY);
+    status.textContent='Konfigurasi API dihapus dari Firebase.';
+  }catch(error){status.textContent=`Gagal menghapus konfigurasi Firebase: ${error.message||'periksa koneksi dan Firestore Rules.'}`;}
 }
 async function smartFileAsDataUrl(file){
   return new Promise((resolve,reject)=>{
@@ -882,7 +965,11 @@ async function smartRequestAi(config,apiKey,prompt,file){
   try{
     const response=await fetch(endpoint,{method:'POST',headers,body:JSON.stringify(body),signal:controller.signal});
     const payload=await response.json().catch(()=>({}));
-    if(!response.ok) throw new Error(smartAiError(response,payload,provider));
+    if(!response.ok){
+      const error=new Error(smartAiError(response,payload,provider));
+      error.status=response.status;
+      throw error;
+    }
     const answer=config.provider==='claude'?(payload.content||[]).filter(part=>part.type==='text').map(part=>part.text).join('\n').trim():(payload.candidates?.[0]?.content?.parts||[]).map(part=>part.text||'').join('\n').trim();
     if(!answer){
       const block=payload.promptFeedback?.blockReason;
@@ -894,6 +981,27 @@ async function smartRequestAi(config,apiKey,prompt,file){
     if(error instanceof TypeError) throw new Error('Tidak dapat menjangkau API. Periksa koneksi internet, CORS/browser, lalu coba kembali.');
     throw error;
   }finally{clearTimeout(timeout);}
+}
+async function smartRequestAiWithFailover(apis,prompt,file){
+  const available=smartNormalizeAiApis(apis).filter(api=>api.model&&api.apiKey);
+  if(!available.length)throw new Error('Belum ada API AI dengan Model ID dan API key yang lengkap.');
+  const savedIndex=Number(localStorage.getItem(SMART_AI_ACTIVE_API_KEY)||0);
+  const start=Number.isInteger(savedIndex)&&savedIndex>=0?savedIndex%available.length:0;
+  const failures=[];
+  for(let offset=0;offset<available.length;offset++){
+    const index=(start+offset)%available.length;
+    const config=available[index];
+    try{
+      const answer=await smartRequestAi(config,config.apiKey,prompt,file);
+      localStorage.setItem(SMART_AI_ACTIVE_API_KEY,String(index));
+      return {answer,provider:config.provider==='claude'?'Claude':'Gemini',model:config.model};
+    }catch(error){
+      failures.push(`${config.provider==='claude'?'Claude':'Gemini'} ${config.model}: ${error.message}`);
+      const canFailover=error.status===401||error.status===403||error.status===429||error.status>=500;
+      if(!canFailover)throw error;
+    }
+  }
+  throw new Error(`Semua API gagal. ${failures.join(' | ')}`);
 }
 function smartBuildVisionExtractionPrompt(kind,text){
   return `Baca foto print/error history ATM untuk modul ${kind}. Foto adalah sumber utama; teks OCR tambahan mungkin salah dan hanya boleh dipakai sebagai petunjuk. Jangan menganalisa atau menebak solusi pada tahap ini. Salin setiap baris error yang terbaca secara literal, terutama tanggal, waktu, kode error, dan penanda modul. Jangan mengubah karakter kode yang meragukan. Jika karakter tidak jelas, tulis null untuk code dan jelaskan bagian tidak jelas dalam raw.\n\nKembalikan JSON valid saja dengan bentuk {"events":[{"date":"YYYY-MM-DD atau null","time":"HH:MM:SS atau null","code":"kode persis atau null","raw":"potongan baris","confidence":0.0}]}. confidence adalah 0 sampai 1 berdasarkan keterbacaan. Urutkan dari yang paling awal bila tanggal-waktu terbaca. Maksimal 60 kejadian; jangan membuat baris dari bayangan/refleksi atau teks yang tidak tampak.\n\nTeks OCR petunjuk (jangan dipercaya bila bertentangan dengan foto):\n${text||'(tidak ada teks OCR)'}`;
@@ -1086,12 +1194,15 @@ async function smartRunAiAnalysis(){
   const status=document.getElementById('smartStatus');
   const output=document.getElementById('smartAiOutput');
   const button=document.getElementById('smartAiBtn');
-  let config={};
-  try{config=JSON.parse(localStorage.getItem(SMART_AI_CONFIG_KEY)||'{}');}catch(e){}
-  const apiKey=sessionStorage.getItem(SMART_AI_SESSION_KEY)||'';
-  if(!config.model||!apiKey){status.textContent='Konfigurasi AI belum tersedia. Minta Admin mengisi Konfigurasi AI Vision di Admin Panel.';return;}
+  let settings;
+  try{
+    const saved=await window.__fb.getAiConfig();
+    settings=saved?{apis:smartNormalizeAiApis(saved.apis),vision:saved.vision!==false}:smartReadLegacyAiSettings();
+  }catch(error){status.textContent=`Gagal memuat konfigurasi AI dari Firebase: ${error.message||'periksa koneksi dan Firestore Rules.'}`;return;}
+  const apis=settings?.apis||[];
+  if(!apis.length){status.textContent='Konfigurasi AI belum tersedia. Minta Admin mengisi Konfigurasi AI Vision di Admin Panel.';return;}
   const file=document.getElementById('smartImage').files[0];
-  if(file&&config.vision===false){status.textContent='Analisis Vision dinonaktifkan oleh Admin. Aktifkan Vision di Konfigurasi AI atau gunakan teks riwayat.';return;}
+  if(file&&settings.vision===false){status.textContent='Analisis Vision dinonaktifkan oleh Admin. Aktifkan Vision di Konfigurasi AI atau gunakan teks riwayat.';return;}
   const text=document.getElementById('smartHistoryText').value.trim();
   if(!file&&!text){status.textContent='Unggah foto atau isi teks print history sebelum menjalankan analisis AI.';return;}
   button.disabled=true;
@@ -1100,8 +1211,8 @@ async function smartRunAiAnalysis(){
     let events;
     if(file){
       status.textContent='Tahap 1/2: membaca tanggal dan kode langsung dari foto...';
-      const extraction=await smartRequestAi(config,apiKey,smartBuildVisionExtractionPrompt(document.getElementById('smartModule').value,text),file);
-      events=smartPrioritizeEvents(smartParseVisionEvents(extraction));
+      const extraction=await smartRequestAiWithFailover(apis,smartBuildVisionExtractionPrompt(document.getElementById('smartModule').value,text),file);
+      events=smartPrioritizeEvents(smartParseVisionEvents(extraction.answer));
     }else{
       events=smartPrioritizeEvents(smartParseHistory(text).map((row,index)=>({...row,raw:row.line,confidence:1,index})));
       if(!events.length) throw new Error('Teks tidak berisi baris tanggal dan kode yang dikenali. Unggah foto untuk pembacaan Vision atau perbaiki teks.');
@@ -1112,10 +1223,10 @@ async function smartRunAiAnalysis(){
     smartRenderErrorSequence(output,sequence);
     const analysisRecords=records.concat((records.ocrCandidates||[]).map(candidate=>({...candidate.record,ocrCandidateFor:candidate.event.code})));
     status.textContent=`Tahap 2/2: ${records.length} kode terverifikasi${(records.ocrCandidates||[]).length?` dan ${(records.ocrCandidates||[]).length} kandidat OCR`:''}. Menyusun analisa kronologis...`;
-    const answer=await smartRequestAi(config,apiKey,smartBuildFieldAnalysisPrompt(kind,events,analysisRecords,sequence),null);
+    const answer=await smartRequestAiWithFailover(apis,smartBuildFieldAnalysisPrompt(kind,events,analysisRecords,sequence),null);
     const result=document.createElement('pre');
     result.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 var(--ui-font);color:#1A1F36;margin:0';
-    result.textContent=answer;
+    result.textContent=answer.answer;
     const section=document.createElement('section');
     section.className='smart-result module';
     const heading=smartAppendText(section,`Analisa lapangan (${records.length} referensi database cocok)`,'h3');
@@ -1130,14 +1241,13 @@ async function smartTestAiConnection(){
   const status=document.getElementById('adminAiStatus');
   const button=document.getElementById('adminAiTestBtn');
   if(!currentIsAdmin){status.textContent='Hanya Admin yang dapat menguji konfigurasi AI.';return;}
-  const config={provider:document.getElementById('adminAiProvider').value,model:document.getElementById('adminAiModel').value.trim()};
-  const apiKey=document.getElementById('adminAiKey').value.trim();
-  if(!config.model||!apiKey){status.textContent='Isi Model ID dan API key sebelum menguji.';return;}
+  const apis=smartReadAdminAiForm().apis;
+  if(!apis.length||apis.some(api=>!api.model||!api.apiKey)){status.textContent='Isi Model ID dan API key pada setiap baris sebelum menguji.';return;}
   button.disabled=true;
-  status.textContent='Menguji koneksi provider...';
+  status.textContent=`Menguji ${apis.length} API dengan failover...`;
   try{
-    await smartRequestAi(config,apiKey,'Balas persis dengan: Koneksi API berhasil.',null);
-    status.textContent='Koneksi berhasil. Model menerima request teks; uji foto lewat Analisa Foto + Problem AI.';
+    const result=await smartRequestAiWithFailover(apis,'Balas persis dengan: Koneksi API berhasil.',null);
+    status.textContent=`Koneksi berhasil menggunakan ${result.provider} / ${result.model}.`;
   }catch(error){status.textContent=error.message||'Tes API gagal.';}
   finally{button.disabled=false;}
 }
@@ -2244,7 +2354,7 @@ doFilter();
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-  import { getFirestore, collection, doc, setDoc, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
   // >>> GANTI dengan firebaseConfig dari Firebase Console (Project Settings > General > Your apps) <<<
   const firebaseConfig = {
@@ -2268,6 +2378,16 @@ doFilter();
     signOut: () => signOut(fbAuth),
     docRef: (mod, k) => doc(fbDb, 'errorcodes_overlay', mod, 'records', k),
     setDoc,
+    getAiConfig: async () => {
+      const snap = await getDoc(doc(fbDb, 'app_config', 'smart_ai'));
+      return snap.exists() ? snap.data() : null;
+    },
+    saveAiConfig: (config) => setDoc(doc(fbDb, 'app_config', 'smart_ai'), {
+      apis: config.apis,
+      vision: config.vision,
+      updatedAt: new Date().toISOString()
+    }),
+    deleteAiConfig: () => deleteDoc(doc(fbDb, 'app_config', 'smart_ai')),
     isAdmin: async (uid) => {
       try {
         const snap = await getDoc(doc(fbDb, 'admins', uid));
@@ -2346,28 +2466,15 @@ doFilter();
       <div style="margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid #C5D0F0">
         <button type="button" onclick="toggleAdminAiSettings()" id="adminAiToggle" aria-expanded="false" style="padding:8px 14px;border:1px solid #1565C0;border-radius:7px;background:#E3EEFF;color:#1565C0;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--ui-font)">Konfigurasi AI Vision</button>
         <div id="adminAiSettings" style="display:none;margin-top:12px;padding:16px;background:#F0F4FF;border:1px solid #C5D0F0;border-radius:8px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div>
-              <label for="adminAiProvider" style="font-size:11px;font-weight:600;color:#4A5680;display:block;margin-bottom:4px">Provider</label>
-              <select id="adminAiProvider" style="width:100%;padding:9px 10px;border:1px solid #A8B8E8;border-radius:6px;background:#fff;color:#1A1F36;font-family:var(--ui-font)">
-                <option value="gemini">Google Gemini</option>
-                <option value="claude">Anthropic Claude</option>
-              </select>
-            </div>
-            <div>
-              <label for="adminAiModel" style="font-size:11px;font-weight:600;color:#4A5680;display:block;margin-bottom:4px">Model ID</label>
-              <input id="adminAiModel" placeholder="contoh: gemini-2.5-flash" style="width:100%;padding:9px 10px;border:1px solid #A8B8E8;border-radius:6px;font-family:var(--ui-font)">
-            </div>
-            <div style="grid-column:1/-1">
-              <label for="adminAiKey" style="font-size:11px;font-weight:600;color:#4A5680;display:block;margin-bottom:4px">API Key</label>
-              <input id="adminAiKey" type="password" autocomplete="new-password" placeholder="Masukkan API key provider" style="width:100%;padding:9px 10px;border:1px solid #A8B8E8;border-radius:6px;font-family:var(--ui-font)">
-            </div>
-          </div>
+          <div style="font-size:11px;color:#4A5680;margin-bottom:8px">Maksimal 10 API. Sistem beralih otomatis jika key ditolak, kuota/rate limit habis, atau server provider bermasalah.</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1.5fr auto;gap:8px;font-size:10px;font-weight:700;color:#4A5680"><span>Provider</span><span>Model ID</span><span>API Key</span><span></span></div>
+          <div id="adminAiApiList"></div>
+          <button type="button" id="adminAiAddApiBtn" onclick="addAdminAiApi()" style="margin-top:10px;padding:7px 12px;border:1px solid #1565C0;border-radius:6px;background:#fff;color:#1565C0;font-size:11px;font-weight:700;cursor:pointer">+ Tambah API</button>
           <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:#1A1F36;cursor:pointer">
             <input id="adminAiVision" type="checkbox" checked style="accent-color:#1565C0;width:16px;height:16px">
             Izinkan analisis Vision dari foto Print History
           </label>
-          <div style="font-size:11px;color:#8A96B8;margin-top:8px;line-height:1.5">API key hanya disimpan di session browser ini. Karena HTML memanggil API langsung dari browser, key dapat terlihat oleh pengguna perangkat ini; untuk penggunaan bersama, gunakan backend/proxy yang aman.</div>
+          <div style="font-size:11px;color:#8A96B8;margin-top:8px;line-height:1.5">API key disimpan di Firestore dan digunakan langsung dari browser. Pengguna yang diberi izin baca dokumen konfigurasi dapat mengakses key; untuk keamanan lebih kuat gunakan backend/proxy.</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
             <button type="button" onclick="saveAdminAiSettings()" style="padding:8px 14px;border:0;border-radius:6px;background:#1B7F3A;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Simpan Konfigurasi AI</button>
             <button type="button" onclick="smartTestAiConnection()" id="adminAiTestBtn" style="padding:8px 14px;border:1px solid #1565C0;border-radius:6px;background:#fff;color:#1565C0;font-size:12px;font-weight:700;cursor:pointer">Tes Koneksi API</button>
