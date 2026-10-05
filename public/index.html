@@ -389,10 +389,10 @@ mark{background:#FFF176;color:#E65100;border-radius:2px;padding:0 2px}
 .portal-category-btn,.portal-bank-btn,.portal-back-btn{padding:9px 16px;border:1px solid #A8B8E8;border-radius:6px;background:#fff;color:#1A1F36;font:600 12px var(--ui-font);cursor:pointer;transition:all .15s}
 .portal-category-btn{min-width:160px;min-height:82px;text-align:left;font-size:16px;font-weight:700;border-left:4px solid #1565C0}
 .portal-category-btn:hover,.portal-bank-btn:hover,.portal-back-btn:hover{border-color:#1565C0;color:#1565C0;background:#E3EEFF}
-.portal-file{padding:14px 16px;margin-bottom:8px;background:#fff;border:1px solid #D5DCEA;border-radius:8px}
+.portal-file{padding:14px 16px;margin-bottom:8px;background:#fff;border:1px solid #D5DCEA;border-radius:8px;display:flex;justify-content:space-between;align-items:center;gap:16px}
 .portal-file h3{font-size:14px;color:#1A1F36;margin:0 0 4px}
 .portal-file p{font-size:12px;color:#5F6B7A;white-space:pre-wrap;margin:0 0 10px}
-.portal-download{display:inline-flex;padding:8px 12px;border-radius:6px;background:#1565C0;color:#fff;text-decoration:none;font-size:12px;font-weight:700}
+.portal-download{display:inline-flex;padding:8px 12px;border-radius:6px;background:#1565C0;color:#fff;text-decoration:none;font-size:12px;font-weight:700;justify-content:center;align-items:center;flex-shrink:0}
 .portal-download:hover{background:#0D47A1}
 .smart-icon{width:48px;height:48px;border-radius:8px;background:#E3EEFF;color:#1565C0;display:flex;align-items:center;justify-content:center;font-size:23px;flex-shrink:0}
 .smart-box{background:#fff;border:1px solid #C5D0F0;border-radius:10px;padding:18px;margin-top:12px}
@@ -415,7 +415,17 @@ mark{background:#FFF176;color:#E65100;border-radius:2px;padding:0 2px}
 .smart-log-list li{padding:3px 0}
 .smart-preview{display:none;max-width:100%;max-height:300px;object-fit:contain;border:1px solid #C5D0F0;border-radius:6px;margin:8px 0}
 @media(max-width:600px){.smart-box{padding:12px}.smart-field{min-width:100%}.smart-controls .smart-action{width:100%}}
-@media(max-width:600px){#brandSelectorBar{padding:8px 10px!important;overflow-x:auto}#brandSelectorBar button{white-space:nowrap}.portal-category-btn{flex:1;min-width:100%}}
+@media(max-width:600px){
+  #brandSelectorBar{padding:8px 10px!important;overflow-x:auto}#brandSelectorBar button{white-space:nowrap}
+  .portal-category-btn{flex:1;min-width:100%}
+  #portalTsBankHeading,#portalTsFilesTitle{font-size:16px}
+  #portalTsSoftwareBanks>div,#portalTsModuleCategories>div{margin-bottom:12px}
+  #portalTsFileList .portal-file{display:flex;flex-direction:column;align-items:stretch;gap:10px;padding:12px 14px}
+  #portalTsFileList .portal-file>div{width:100%}
+  #portalTsFileList .portal-file a,.portal-download{width:100%;display:flex}
+  #portalTsSoftwareBanks>div,#portalTsModuleCategories>div{font-size:12px}
+  #portalTsSoftwareBanks>div[style],#portalTsModuleCategories>div[style]{display:flex;flex-wrap:wrap;gap:8px}
+}
 
 /* ===== EXPORT BTN ===== */
 .export-btn{
@@ -566,7 +576,10 @@ mark{background:#FFF176;color:#E65100;border-radius:2px;padding:0 2px}
         </div>
         <div class="smart-field" style="min-width:240px">
           <label for="smartImage">Foto print history</label>
-          <input id="smartImage" type="file" accept="image/*" onchange="smartReadImage(this.files[0])">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input id="smartImage" type="file" accept="image/*" capture="environment" onchange="smartReadImage(this.files[0])" style="display:none">
+            <button type="button" class="smart-action secondary" onclick="document.getElementById('smartImage').click()" style="flex:1;min-width:160px">Ambil Foto / Pilih File</button>
+          </div>
         </div>
         <button class="smart-action secondary" onclick="smartRunOcr()" id="smartOcrBtn">Baca Foto</button>
         <button class="smart-action" onclick="smartAnalyze()">Analisa Riwayat</button>
@@ -740,7 +753,7 @@ async function showPortalFiles(category, bank){
     matches.sort((a,b)=>(a.title||'').localeCompare(b.title||''));
     matches.forEach(file=>{
       const row=document.createElement('article');
-      row.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 16px;margin-bottom:8px;background:#fff;border:1px solid #D5DCEA;border-radius:8px';
+      row.className='portal-file';
       const details=document.createElement('div');
       const title=document.createElement('div');
       title.textContent=file.title||'File tanpa judul';
@@ -755,8 +768,8 @@ async function showPortalFiles(category, bank){
         link.href=portalDownloadUrl(safeUrl);
         link.target='_blank';
         link.rel='noopener noreferrer';
+        link.className='portal-download';
         link.textContent='⬇ Download';
-        link.style.cssText='flex-shrink:0;padding:8px 12px;border-radius:6px;background:#1565C0;color:#fff;text-decoration:none;font-size:12px;font-weight:700';
         row.append(details,link);
       }else row.append(details);
       list.append(row);
@@ -871,29 +884,78 @@ async function renderPortalAdminFiles(){
   try{
     const files=await loadPortalFiles();
     renderPortalAdminModuleCategories();
-    list.replaceChildren();
-    const downloadableFiles=files.filter(file=>file.kind!=='category');
-    downloadableFiles.sort((a,b)=>(a.title||'').localeCompare(b.title||''));
-    if(!downloadableFiles.length){list.textContent='Belum ada file Portal TS.';return;}
-    downloadableFiles.forEach(file=>{
-      const row=document.createElement('div');
-      row.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid #D5DCEA';
-      const label=document.createElement('span');
-      label.textContent=(file.category==='software'?'Software / '+file.bank:file.category==='modul-atm'?'Modul ATM / '+file.bank:'Tools')+' - '+file.title;
-      label.style.cssText='font-size:11px;color:#1A1F36;overflow-wrap:anywhere';
-      const actions=document.createElement('div');
-      actions.style.cssText='display:flex;gap:6px;flex-shrink:0';
-      const edit=document.createElement('button');
-      edit.type='button';edit.textContent='Edit';edit.onclick=()=>editPortalFile(file.id);
-      const remove=document.createElement('button');
-      remove.type='button';remove.textContent='Hapus';remove.style.color='#D32F2F';remove.onclick=()=>deletePortalFile(file.id);
-      [edit,remove].forEach(button=>{button.style.cssText+=';padding:5px 8px;border:1px solid #C5D0F0;border-radius:5px;background:#fff;cursor:pointer;font-size:10px';});
-      actions.append(edit,remove);row.append(label,actions);list.append(row);
+    const bankFilter=document.getElementById('portalAdminFileBankFilter');
+    const previousBankFilter=bankFilter.value;
+    const filterOptions=new Map();
+    files.filter(file=>file.kind!=='category').forEach(file=>{
+      const value=file.category==='tools'?'tools':`${file.category}:${file.bank||''}`;
+      const label=file.category==='software'?'Software / '+file.bank:file.category==='modul-atm'?'Modul ATM / '+file.bank:'Tools';
+      filterOptions.set(value,label);
     });
+    bankFilter.replaceChildren(new Option('Semua bank/kategori','all'));
+    [...filterOptions.entries()].sort((a,b)=>a[1].localeCompare(b[1])).forEach(([value,label])=>bankFilter.add(new Option(label,value)));
+    bankFilter.value=filterOptions.has(previousBankFilter)?previousBankFilter:'all';
+    filterPortalAdminFiles();
   }catch(error){
     list.textContent='Gagal memuat daftar admin. Periksa koneksi dan aturan akses Firestore.';
     console.warn('Gagal memuat file admin Portal TS:',error);
   }
+}
+function filterPortalAdminFiles(){
+  const list=document.getElementById('portalAdminFileList');
+  if(!list)return;
+  const search=(document.getElementById('portalAdminFileSearch').value||'').trim().toLocaleLowerCase();
+  const category=document.getElementById('portalAdminFileCategoryFilter').value;
+  const bankCategoryFilter=document.getElementById('portalAdminFileBankFilter');
+  let bankCategory=bankCategoryFilter.value;
+  if(category!=='all'&&bankCategory!=='all'){
+    const selectedMenu=bankCategory==='tools'?'tools':bankCategory.split(':',1)[0];
+    if(selectedMenu!==category){bankCategory='all';bankCategoryFilter.value='all';}
+  }
+  const maxRows=Number(document.getElementById('portalAdminFileMaxRows').value)||10;
+  const matches=portalFiles.filter(file=>{
+    if(file.kind==='category')return false;
+    if(category!=='all'&&file.category!==category)return false;
+    if(bankCategory!=='all'){
+      const value=file.category==='tools'?'tools':`${file.category}:${file.bank||''}`;
+      if(value!==bankCategory)return false;
+    }
+    const searchable=[file.title,file.description,file.bank,file.category].join(' ').toLocaleLowerCase();
+    return !search||searchable.includes(search);
+  }).sort((a,b)=>(a.title||'').localeCompare(b.title||''));
+  const count=document.getElementById('portalAdminFileCount');
+  const pageSelect=document.getElementById('portalAdminFilePageSelect');
+  const totalPages=Math.max(1,Math.ceil(matches.length/maxRows || 1));
+  let page=Number(pageSelect&&pageSelect.value)||1;
+  if(!Number.isFinite(page)||page<1)page=1;
+  page=Math.min(page,totalPages);
+  if(pageSelect){
+    pageSelect.replaceChildren();
+    for(let i=1;i<=totalPages;i++)pageSelect.add(new Option(`Halaman ${i}`,String(i)));
+    pageSelect.value=String(page);
+    pageSelect.closest('div').style.display=totalPages>1?'block':'none';
+  }
+  const startIndex=(page-1)*maxRows;
+  const endIndex=Math.min(startIndex+maxRows,matches.length);
+  const pageItems=matches.slice(startIndex,endIndex);
+  count.textContent=matches.length?`Menampilkan ${startIndex+1}-${endIndex} dari ${matches.length} file • Halaman ${page}/${totalPages}`:'Tidak ada file yang cocok.';
+  list.replaceChildren();
+  if(!matches.length)return;
+  pageItems.forEach(file=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid #D5DCEA';
+    const label=document.createElement('span');
+    label.textContent=(file.category==='software'?'Software / '+file.bank:file.category==='modul-atm'?'Modul ATM / '+file.bank:'Tools')+' - '+file.title;
+    label.style.cssText='font-size:11px;color:#1A1F36;overflow-wrap:anywhere';
+    const actions=document.createElement('div');
+    actions.style.cssText='display:flex;gap:6px;flex-shrink:0';
+    const edit=document.createElement('button');
+    edit.type='button';edit.textContent='Edit';edit.onclick=()=>editPortalFile(file.id);
+    const remove=document.createElement('button');
+    remove.type='button';remove.textContent='Hapus';remove.style.color='#D32F2F';remove.onclick=()=>deletePortalFile(file.id);
+    [edit,remove].forEach(button=>{button.style.cssText+=';padding:5px 8px;border:1px solid #C5D0F0;border-radius:5px;background:#fff;cursor:pointer;font-size:10px';});
+    actions.append(edit,remove);row.append(label,actions);list.append(row);
+  });
 }
 function editPortalFile(id){
   const file=portalFiles.find(item=>item.id===id);
@@ -2806,6 +2868,34 @@ doFilter();
           <button type="button" onclick="savePortalFile()" id="portalAdminSaveBtn" style="padding:9px 16px;border:0;border-radius:6px;background:#1B7F3A;color:#fff;font-weight:700;cursor:pointer">Simpan File</button>
           <button type="button" onclick="resetPortalAdminForm()" style="padding:9px 16px;border:1px solid #A8B8E8;border-radius:6px;background:#fff;color:#4A5680;cursor:pointer">Batal Edit</button>
           <span id="portalAdminStatus" role="status" style="font-size:11px;color:#4A5680"></span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:end">
+          <label style="flex:2 1 220px;font-size:11px;font-weight:600;color:#4A5680">Search file
+            <input id="portalAdminFileSearch" type="search" placeholder="Cari judul atau deskripsi..." oninput="filterPortalAdminFiles()" style="display:block;box-sizing:border-box;width:100%;margin-top:4px;padding:9px;border:1px solid #A8B8E8;border-radius:6px;font:inherit">
+          </label>
+          <label style="flex:1 1 140px;font-size:11px;font-weight:600;color:#4A5680">Filter menu
+            <select id="portalAdminFileCategoryFilter" onchange="filterPortalAdminFiles()" style="display:block;box-sizing:border-box;width:100%;margin-top:4px;padding:9px;border:1px solid #A8B8E8;border-radius:6px;font:inherit;background:#fff">
+              <option value="all">Semua menu</option><option value="software">Software</option><option value="modul-atm">Modul ATM</option><option value="tools">Tools</option>
+            </select>
+          </label>
+          <label style="flex:1 1 150px;font-size:11px;font-weight:600;color:#4A5680">Filter bank/kategori
+            <select id="portalAdminFileBankFilter" onchange="filterPortalAdminFiles()" style="display:block;box-sizing:border-box;width:100%;margin-top:4px;padding:9px;border:1px solid #A8B8E8;border-radius:6px;font:inherit;background:#fff">
+              <option value="all">Semua bank/kategori</option>
+            </select>
+          </label>
+          <label style="flex:1 1 110px;font-size:11px;font-weight:600;color:#4A5680">Maks. baris
+            <select id="portalAdminFileMaxRows" onchange="filterPortalAdminFiles()" style="display:block;box-sizing:border-box;width:100%;margin-top:4px;padding:9px;border:1px solid #A8B8E8;border-radius:6px;font:inherit;background:#fff">
+              <option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option>
+            </select>
+          </label>
+        </div>
+        <div id="portalAdminFileCount" aria-live="polite" style="margin-top:8px;font-size:11px;color:#5F6B7A"></div>
+        <div id="portalAdminFilePageWrap" style="display:none;margin-top:8px">
+          <label style="font-size:11px;font-weight:600;color:#4A5680;display:inline-block">Pilih halaman
+            <select id="portalAdminFilePageSelect" onchange="filterPortalAdminFiles()" style="display:block;box-sizing:border-box;margin-top:4px;padding:8px 10px;border:1px solid #A8B8E8;border-radius:6px;font:inherit;background:#fff;min-width:120px">
+              <option value="1">Halaman 1</option>
+            </select>
+          </label>
         </div>
         <div id="portalAdminFileList" style="margin-top:12px"></div>
       </section>
