@@ -394,6 +394,13 @@ mark{background:#FFF176;color:#E65100;border-radius:2px;padding:0 2px}
 .portal-file p{font-size:12px;color:#5F6B7A;white-space:pre-wrap;margin:0 0 10px}
 .portal-download{display:inline-flex;padding:8px 12px;border-radius:6px;background:#1565C0;color:#fff;text-decoration:none;font-size:12px;font-weight:700}
 .portal-download:hover{background:#0D47A1}
+.portal-list-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0}
+.portal-list-controls input,.portal-list-controls select{min-height:38px;padding:8px 10px;border:1px solid #A8B8E8;border-radius:6px;background:#fff;color:#1A1F36;font:12px var(--ui-font)}
+.portal-list-controls input{flex:1;min-width:220px}
+.portal-list-meta{font-size:12px;color:#5F6B7A}
+.portal-pagination{display:flex;align-items:center;justify-content:center;gap:10px;margin:14px 0}
+.portal-pagination button{padding:7px 12px;border:1px solid #A8B8E8;border-radius:6px;background:#fff;color:#1A1F36;font:600 12px var(--ui-font);cursor:pointer}
+.portal-pagination button:disabled{opacity:.5;cursor:not-allowed}
 .smart-icon{width:48px;height:48px;border-radius:8px;background:#E3EEFF;color:#1565C0;display:flex;align-items:center;justify-content:center;font-size:23px;flex-shrink:0}
 .smart-box{background:#fff;border:1px solid #C5D0F0;border-radius:10px;padding:18px;margin-top:12px}
 .smart-controls{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin-bottom:14px}
@@ -632,7 +639,24 @@ mark{background:#FFF176;color:#E65100;border-radius:2px;padding:0 2px}
   <div id="portalTsFilesView" style="display:none">
     <button id="portalTsBackBtn" onclick="backPortalFiles()" class="portal-back-btn">← Kembali</button>
     <div id="portalTsFilesTitle" style="font-size:18px;font-weight:700;color:#1B2A4A;margin:8px 0 14px"></div>
+    <div id="portalSoftwareListControls" class="portal-list-controls" style="display:none">
+      <input id="portalSoftwareSearch" type="search" placeholder="Cari nama atau deskripsi file..." aria-label="Cari file" oninput="portalUpdateFileList()">
+      <label for="portalSoftwarePageSize" style="font-size:12px;color:#4A5680;font-weight:600">Maks. baris per halaman</label>
+      <select id="portalSoftwarePageSize" aria-label="Maksimum baris per halaman" onchange="portalUpdateFileList()">
+        <option value="10" selected>10</option>
+        <option value="25">25</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+        <option value="0">Semua</option>
+      </select>
+      <span id="portalSoftwareListMeta" class="portal-list-meta" aria-live="polite"></span>
+    </div>
     <div id="portalTsFileList" aria-live="polite"></div>
+    <div id="portalSoftwarePagination" class="portal-pagination" style="display:none">
+      <button id="portalSoftwarePrev" type="button" onclick="portalChangeFilePage(-1)">← Sebelumnya</button>
+      <span id="portalSoftwarePageMeta" class="portal-list-meta" aria-live="polite"></span>
+      <button id="portalSoftwareNext" type="button" onclick="portalChangeFilePage(1)">Berikutnya →</button>
+    </div>
   </div>
 </div>
 
@@ -648,6 +672,8 @@ let portalCategory = '';
 let portalBank = '';
 let portalEditingId = '';
 let portalFiles = [];
+let portalSoftwareMatches = [];
+let portalSoftwarePage = 1;
 function showSmartAnalyzer(){
   document.getElementById('lainnyaBrandList').style.display='none';
   document.getElementById('smartAnalyzerContainer').style.display='block';
@@ -734,45 +760,79 @@ async function showPortalFiles(category, bank){
   document.getElementById('portalTsBanks').style.display='none';
   document.getElementById('portalTsFilesView').style.display='block';
   document.getElementById('portalTsFilesTitle').textContent=category==='software'?'Software - '+bank:category==='modul-atm'?'Modul ATM - '+bank:'Tools';
+  const controls=document.getElementById('portalSoftwareListControls');
+  const pagination=document.getElementById('portalSoftwarePagination');
+  controls.style.display='flex';
+  pagination.style.display='none';
+  document.getElementById('portalSoftwareSearch').value='';
+  portalSoftwarePage=1;
   const list=document.getElementById('portalTsFileList');
   list.textContent='Memuat daftar file...';
   if(!window.__fb){list.textContent='Koneksi database belum siap.';return;}
   try{
     portalFiles=await window.__fb.getPortalFiles();
-    const matches=portalFiles.filter(file=>file.kind!=='category'&&file.category===category&&(!['software','modul-atm'].includes(category)||file.bank===bank));
-    list.replaceChildren();
-    if(!matches.length){
-      list.textContent='Belum ada file untuk kategori ini.';
-      return;
-    }
-    matches.sort((a,b)=>(a.title||'').localeCompare(b.title||''));
-    matches.forEach(file=>{
-      const row=document.createElement('article');
-      row.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 16px;margin-bottom:8px;background:#fff;border:1px solid #D5DCEA;border-radius:8px';
-      const details=document.createElement('div');
-      const title=document.createElement('div');
-      title.textContent=file.title||'File tanpa judul';
-      title.style.cssText='font-size:14px;font-weight:700;color:#1A1F36';
-      const description=document.createElement('div');
-      description.textContent=file.description||'Tidak ada deskripsi.';
-      description.style.cssText='font-size:12px;color:#5F6B7A;margin-top:4px;white-space:pre-wrap';
-      details.append(title,description);
-      const safeUrl=portalSafeDriveUrl(file.url||'');
-      if(safeUrl){
-        const link=document.createElement('a');
-        link.href=portalDownloadUrl(safeUrl);
-        link.target='_blank';
-        link.rel='noopener noreferrer';
-        link.textContent='⬇ Download';
-        link.style.cssText='flex-shrink:0;padding:8px 12px;border-radius:6px;background:#1565C0;color:#fff;text-decoration:none;font-size:12px;font-weight:700';
-        row.append(details,link);
-      }else row.append(details);
-      list.append(row);
-    });
+    portalSoftwareMatches=portalFiles.filter(file=>file.kind!=='category'&&file.category===category&&(!['software','modul-atm'].includes(category)||file.bank===bank));
+    portalSoftwareMatches.sort((a,b)=>(a.title||'').localeCompare(b.title||''));
+    portalUpdateFileList();
   }catch(error){
     list.textContent='Gagal memuat file. Periksa koneksi dan aturan akses Firestore.';
     console.warn('Gagal memuat file Portal TS:',error);
   }
+}
+function portalRenderFileRows(files){
+  const list=document.getElementById('portalTsFileList');
+  list.replaceChildren();
+  if(!files.length){
+    list.textContent=portalSoftwareMatches.length?'Tidak ada file yang cocok dengan pencarian.':'Belum ada file untuk kategori ini.';
+    return;
+  }
+  files.forEach(file=>{
+    const row=document.createElement('article');
+    row.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 16px;margin-bottom:8px;background:#fff;border:1px solid #D5DCEA;border-radius:8px';
+    const details=document.createElement('div');
+    const title=document.createElement('div');
+    title.textContent=file.title||'File tanpa judul';
+    title.style.cssText='font-size:14px;font-weight:700;color:#1A1F36';
+    const description=document.createElement('div');
+    description.textContent=file.description||'Tidak ada deskripsi.';
+    description.style.cssText='font-size:12px;color:#5F6B7A;margin-top:4px;white-space:pre-wrap';
+    details.append(title,description);
+    const safeUrl=portalSafeDriveUrl(file.url||'');
+    if(safeUrl){
+      const link=document.createElement('a');
+      link.href=portalDownloadUrl(safeUrl);
+      link.target='_blank';
+      link.rel='noopener noreferrer';
+      link.textContent='⬇ Download';
+      link.style.cssText='flex-shrink:0;padding:8px 12px;border-radius:6px;background:#1565C0;color:#fff;text-decoration:none;font-size:12px;font-weight:700';
+      row.append(details,link);
+    }else row.append(details);
+    list.append(row);
+  });
+}
+function portalUpdateFileList(){
+  const query=document.getElementById('portalSoftwareSearch').value.trim().toLocaleLowerCase();
+  const pageSize=Number(document.getElementById('portalSoftwarePageSize').value)||0;
+  const filtered=portalSoftwareMatches.filter(file=>`${file.title||''} ${file.description||''}`.toLocaleLowerCase().includes(query));
+  const pageCount=pageSize?Math.max(1,Math.ceil(filtered.length/pageSize)):1;
+  portalSoftwarePage=Math.min(portalSoftwarePage,pageCount);
+  const start=pageSize?(portalSoftwarePage-1)*pageSize:0;
+  const visible=pageSize?filtered.slice(start,start+pageSize):filtered;
+  portalRenderFileRows(visible);
+  const controls=document.getElementById('portalSoftwareListControls');
+  const pagination=document.getElementById('portalSoftwarePagination');
+  controls.style.display='flex';
+  pagination.style.display=filtered.length>pageSize&&pageSize?'flex':'none';
+  const rangeStart=filtered.length?start+1:0;
+  const rangeEnd=Math.min(start+visible.length,filtered.length);
+  document.getElementById('portalSoftwareListMeta').textContent=`Menampilkan ${rangeStart}-${rangeEnd} dari ${filtered.length} hasil`;
+  document.getElementById('portalSoftwarePageMeta').textContent=`Halaman ${portalSoftwarePage} dari ${pageCount}`;
+  document.getElementById('portalSoftwarePrev').disabled=portalSoftwarePage<=1;
+  document.getElementById('portalSoftwareNext').disabled=portalSoftwarePage>=pageCount;
+}
+function portalChangeFilePage(offset){
+  portalSoftwarePage+=offset;
+  portalUpdateFileList();
 }
 function portalDownloadUrl(value){
   try{
