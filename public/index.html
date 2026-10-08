@@ -679,6 +679,40 @@ let portalEditingId = '';
 let portalFiles = [];
 let portalSoftwareMatches = [];
 let portalSoftwarePage = 1;
+
+// ===== PENCATAT PENGGUNAAN =====
+const __usageLastSeen = {};
+function usageLog(e){
+  try{
+    if(!window.__fb || !window.__fb.logUsage) return;
+    const key = [e.type,e.brand,e.module,e.query,e.fileId].join('|');
+    const now = Date.now();
+    if(__usageLastSeen[key] && now-__usageLastSeen[key] < 30000) return; // cegah duplikat 30 detik
+    __usageLastSeen[key] = now;
+    const clean = {};
+    Object.keys(e).forEach(k=>{ if(e[k]!==undefined && e[k]!==null) clean[k]=e[k]; });
+    window.__fb.logUsage(clean);
+  }catch(err){ console.warn('usageLog gagal', err); }
+}
+const __usageSearchTimers = {};
+function usageLogSearch(brand, module, text, results){
+  const t = String(text||'').trim().toUpperCase();
+  clearTimeout(__usageSearchTimers[brand]);
+  if(t.length < 3) return;
+  __usageSearchTimers[brand] = setTimeout(()=>usageLog({type:'search',brand,module,query:t.slice(0,80),results}), 1500);
+}
+function usageWatchFrame(frame, brand, module){
+  frame.addEventListener('load', ()=>{
+    try{
+      frame.contentDocument.addEventListener('input', ev=>{
+        const el = ev.target;
+        if(el && el.matches && el.matches('input[type=search],input[type=text],input:not([type])') && !el.matches('[type=file]')){
+          usageLogSearch(brand, module, el.value, null);
+        }
+      }, true);
+    }catch(err){ console.warn('Tidak bisa memantau iframe', brand, err); }
+  });
+}
 function showSmartAnalyzer(){
   document.getElementById('lainnyaBrandList').style.display='none';
   document.getElementById('smartAnalyzerContainer').style.display='block';
@@ -808,6 +842,7 @@ function portalRenderFileRows(files){
       link.href=portalDownloadUrl(safeUrl);
       link.target='_blank';
       link.rel='noopener noreferrer';
+      link.addEventListener('click',()=>usageLog({type:'download',brand:'portal',category:portalCategory,bank:portalBank||'',fileId:file.id||'',fileTitle:String(file.title||'').slice(0,120)}));
       link.textContent='⬇ Download';
       link.style.cssText='flex-shrink:0;padding:8px 12px;border-radius:6px;background:#1565C0;color:#fff;text-decoration:none;font-size:12px;font-weight:700';
       row.append(details,link);
@@ -1050,6 +1085,7 @@ function showNcr(){
   if(!ncrLoaded){
     const bytes = Uint8Array.from(atob(NCR_HTML_B64), c=>c.charCodeAt(0));
     const html = new TextDecoder('utf-8').decode(bytes);
+    usageWatchFrame(document.getElementById('ncrFrame'),'ncr','m-status');
     document.getElementById('ncrFrame').srcdoc = html;
     ncrLoaded = true;
   }
@@ -1078,6 +1114,7 @@ function showWincor(){
       td{border-color:#C5D0F0!important;color:#1A1F36!important}
       a{color:#1565C0!important}
     </style></head>`);
+    usageWatchFrame(document.getElementById('wincorFrame'),'wincor','cdm-v4');
     document.getElementById('wincorFrame').srcdoc = html;
     wincorLoaded = true;
   }
@@ -1200,6 +1237,7 @@ function smartAnalyze(){
   const status=document.getElementById('smartStatus');
   const rows=smartParseHistory(text);
   if(!rows.length){status.textContent='Tidak menemukan baris tanggal, waktu, dan kode. Periksa teks hasil OCR atau masukkan teks secara manual.';output.innerHTML='';return;}
+  usageLog({type:'smart_analyze',brand:'smart',module:kind,mode:'riwayat',results:rows.length,query:'riwayat '+kind});
   const firstDate=rows[0].date;
   const firstDay=rows.filter(row=>row.date===firstDate);
   const transaction=firstDay.find(row=>smartIsTransactionCode(row.code));
@@ -1676,6 +1714,7 @@ async function smartRunAiAnalysis(){
       analysis:answer.answer
     };
     exportButton.style.display='';
+    usageLog({type:'smart_analyze',brand:'smart',module:kind,mode:file?'ai-foto':'ai-teks',results:records.length,query:'ai '+kind});
     status.textContent='Analisa selesai. Cocokkan kode berkeyakinan rendah dengan foto asli sebelum tindakan perbaikan.';
   }catch(error){status.textContent=error.message||'Analisa foto dan problem gagal dijalankan.';}
   finally{button.disabled=false;}
@@ -1771,6 +1810,7 @@ function smartExportAiReport(){
   const timestamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z');
   link.href=url;
   link.download=`Laporan-Smart-Analyzer-${timestamp}.xls`;
+  usageLog({type:'download',brand:'smart',category:'laporan-smart-analyzer',fileTitle:link.download});
   link.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
@@ -2228,6 +2268,7 @@ function goPg(p){
 function openMdl(idx){
   const row=filtered[idx];
   if(!row)return;
+  usageLog({type:'view_error',brand:'hyosung',module:mod,query:String(row.k||'').toUpperCase()});
   const sv=sev(row.s);
   const bc=sv==='red'?'br':sv==='amber'?'ba':'bg';
   const bl=sv==='red'?'🔴 WARNING':sv==='amber'?'🟡 PERIKSA / PERBAIKI':'⚪ SOFTWARE / RESTART';
@@ -2739,6 +2780,7 @@ function onSrch(){
   timer = setTimeout(()=>{
     q=document.getElementById('srch').value.toLowerCase().trim();
     pg=1; doFilter();
+    usageLogSearch('hyosung', mod, q, filtered.length);
     if(q.length>=3){
       historySaveTimer = setTimeout(()=>saveToHistory(q),1500);
     }
@@ -2887,7 +2929,7 @@ doFilter();
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-  import { getFirestore, collection, doc, setDoc, getDocs, getDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, getDoc, deleteDoc, onSnapshot, addDoc, serverTimestamp, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
   // >>> GANTI dengan firebaseConfig dari Firebase Console (Project Settings > General > Your apps) <<<
   const firebaseConfig = {
@@ -2945,7 +2987,20 @@ doFilter();
       return snap.docs.map(d => ({id:d.id,...d.data()}));
     },
     savePortalFile: (id, file) => setDoc(doc(fbDb, 'portal_ts', id), file),
-    deletePortalFile: (id) => deleteDoc(doc(fbDb, 'portal_ts', id))
+    deletePortalFile: (id) => deleteDoc(doc(fbDb, 'portal_ts', id)),
+    // ---- Pencatatan penggunaan (usage_events) ----
+    logUsage: (e) => {
+      const u = fbAuth.currentUser; if (!u) return;
+      const wib = new Date(Date.now() + 7*3600e3).toISOString().slice(0,10);
+      addDoc(collection(fbDb, 'usage_events'), Object.assign({}, e, {
+        uid: u.uid, email: u.email || '', day: wib, ts: serverTimestamp()
+      })).catch(() => {});   // gagal log tidak boleh mengganggu FSE
+    },
+    getUsage: async (fromDay, toDay) => {
+      const q = query(collection(fbDb, 'usage_events'),
+        where('day', '>=', fromDay), where('day', '<=', toDay), orderBy('day'), limit(20000));
+      return (await getDocs(q)).docs.map(d => d.data());
+    }
   };
 
   window.dispatchEvent(new Event('fb-ready'));
@@ -2999,8 +3054,25 @@ doFilter();
       <div id="adminPanelTabs" style="display:flex;gap:8px;margin-bottom:18px;border-bottom:1px solid #D5DCEA">
         <button type="button" onclick="setAdminPanelTab('portal')" class="admin-section-tab active">Portal TS</button>
         <button type="button" onclick="setAdminPanelTab('errors')" class="admin-section-tab">Database Error Code</button>
+        <button type="button" onclick="setAdminPanelTab('usage')" class="admin-section-tab">Laporan Penggunaan</button>
       </div>
       <div id="adminPanelContent">
+
+      <section id="usageReportSection" style="display:none;margin-bottom:20px">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:12px">
+          <label style="font-size:11px;font-weight:600;color:#4A5680">Dari
+            <input type="date" id="usageFrom" style="display:block;margin-top:4px;padding:8px;border:1px solid #A8B8E8;border-radius:6px;font:inherit"></label>
+          <label style="font-size:11px;font-weight:600;color:#4A5680">Sampai
+            <input type="date" id="usageTo" style="display:block;margin-top:4px;padding:8px;border:1px solid #A8B8E8;border-radius:6px;font:inherit"></label>
+          <button type="button" class="usage-btn" onclick="usageSetRange(7)">7 hari</button>
+          <button type="button" class="usage-btn" onclick="usageSetRange(30)">30 hari</button>
+          <button type="button" class="usage-btn usage-primary" id="usageLoadBtn" onclick="usageLoadReport()">Muat Laporan</button>
+          <button type="button" class="usage-btn" id="usageCsvBtn" onclick="usageExportCsv()" style="display:none">⬇ Ekspor CSV</button>
+        </div>
+        <div style="margin-bottom:12px"><input id="usageEmailFilter" type="search" placeholder="Filter email FSE (opsional)..." oninput="usageRender()" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #A8B8E8;border-radius:6px;font:inherit"></div>
+        <div id="usageStatus" style="font-size:12px;color:#5F6B7A;margin-bottom:12px">Pilih rentang tanggal lalu klik Muat Laporan.</div>
+        <div id="usageReportBody"></div>
+      </section>
       <section id="portalAdminSection" style="margin-bottom:20px;padding:16px;border:1px solid #C5D0F0;border-radius:9px;background:#F8FAFF">
         <div style="font-size:14px;font-weight:700;color:#1A1F36;margin-bottom:12px">Kelola File Portal TS</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
@@ -3209,6 +3281,7 @@ doFilter();
 <style>
 .admin-mod-btn{padding:6px 16px;border-radius:7px;border:1.5px solid #C5D0F0;background:#F0F4FF;color:#4A5680;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--ui-font);transition:all .15s}
 .admin-mod-active{background:#1565C0!important;color:#fff!important;border-color:#1565C0!important}
+.usage-btn{padding:8px 12px;border:1px solid #A8B8E8;border-radius:6px;background:#fff;color:#1565C0;font:600 12px var(--ui-font);cursor:pointer}.usage-btn.usage-primary{background:#1565C0;color:#fff;border-color:#1565C0}.usage-btn:disabled{opacity:.6}
 .admin-section-tab{padding:9px 14px;border:0;border-bottom:2px solid transparent;background:transparent;color:#5F6B7A;font:600 12px var(--ui-font);cursor:pointer}
 .admin-section-tab.active{border-bottom-color:#1565C0;color:#1565C0}
 </style>
@@ -3382,13 +3455,90 @@ async function checkAdminPass(){
   }
 }
 
+
+// ===== LAPORAN PENGGUNAAN (Admin) =====
+let usageEvents = [];
+const USAGE_BRAND = {hyosung:'Hyosung',wincor:'Wincor',ncr:'NCR',smart:'Smart Analyzer',portal:'Portal TS'};
+const USAGE_CAT = {software:'Software','modul-atm':'Modul ATM',tools:'Tools','laporan-smart-analyzer':'Laporan Smart Analyzer'};
+function usageDay(offset){return new Date(Date.now()+7*3600e3-offset*86400e3).toISOString().slice(0,10);}
+function usageSetRange(days,silent){
+  document.getElementById('usageFrom').value=usageDay(days-1);
+  document.getElementById('usageTo').value=usageDay(0);
+  if(!silent) usageLoadReport();
+}
+async function usageLoadReport(){
+  const from=document.getElementById('usageFrom').value, to=document.getElementById('usageTo').value;
+  const status=document.getElementById('usageStatus'), btn=document.getElementById('usageLoadBtn');
+  if(!currentIsAdmin){status.textContent='Hanya admin yang dapat melihat laporan.';return;}
+  if(!from||!to||from>to){status.textContent='Rentang tanggal tidak valid.';return;}
+  btn.disabled=true; status.textContent='Memuat data penggunaan...';
+  try{
+    usageEvents=await window.__fb.getUsage(from,to);
+    status.textContent=`${usageEvents.length.toLocaleString('id')} aktivitas dari ${from} sampai ${to}`+(usageEvents.length>=20000?' (dibatasi 20.000 data pertama; persempit rentang tanggal)':'');
+    document.getElementById('usageCsvBtn').style.display=usageEvents.length?'':'none';
+    usageRender();
+  }catch(error){
+    status.textContent='Gagal memuat laporan: '+(error.message||'periksa Firestore Rules (usage_events) dan koneksi.');
+    console.warn('Gagal memuat usage_events',error);
+  }finally{btn.disabled=false;}
+}
+function usageFiltered(){
+  const f=(document.getElementById('usageEmailFilter').value||'').trim().toLowerCase();
+  return f?usageEvents.filter(e=>(e.email||'').toLowerCase().includes(f)):usageEvents;
+}
+function usageCount(list,keyFn){
+  const m=new Map();
+  list.forEach(e=>{const k=keyFn(e); if(k===null||k===undefined||k==='')return; m.set(k,(m.get(k)||0)+1);});
+  return Array.from(m.entries()).sort((a,b)=>b[1]-a[1]);
+}
+function usageTable(title,rows,headers,limit){
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const shown=rows.slice(0,limit||15);
+  const body=shown.length?shown.map(r=>'<tr>'+r.map((c,i)=>`<td style="padding:6px 8px;border-top:1px solid #E3E9F7;font-size:12px;${i===r.length-1?'text-align:right;font-weight:700;':''}overflow-wrap:anywhere">${esc(c)}</td>`).join('')+'</tr>').join(''):`<tr><td colspan="${headers.length}" style="padding:10px 8px;font-size:12px;color:#8A96B8">Belum ada data.</td></tr>`;
+  return `<div style="margin-bottom:18px"><div style="font-size:13px;font-weight:700;color:#1A1F36;margin-bottom:6px">${esc(title)}${rows.length>shown.length?` <span style="font-weight:500;color:#8A96B8;font-size:11px">(top ${shown.length} dari ${rows.length})</span>`:''}</div><div style="border:1px solid #D5DCEA;border-radius:8px;overflow:hidden"><table style="width:100%;border-collapse:collapse"><thead><tr style="background:#F0F4FF">${headers.map((h,i)=>`<th style="padding:7px 8px;font-size:11px;color:#4A5680;text-align:${i===headers.length-1?'right':'left'}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div></div>`;
+}
+function usageRender(){
+  const body=document.getElementById('usageReportBody');
+  const ev=usageFiltered();
+  if(!usageEvents.length){body.innerHTML='';return;}
+  const searches=ev.filter(e=>e.type==='search'), views=ev.filter(e=>e.type==='view_error');
+  const smart=ev.filter(e=>e.type==='smart_analyze'), dl=ev.filter(e=>e.type==='download');
+  const users=new Set(ev.map(e=>e.email)).size;
+  const card=(label,val)=>`<div style="flex:1;min-width:110px;padding:12px;border:1px solid #C5D0F0;border-radius:9px;background:#F8FAFF"><div style="font-size:20px;font-weight:800;color:#1565C0">${val.toLocaleString('id')}</div><div style="font-size:11px;color:#4A5680;margin-top:2px">${label}</div></div>`;
+  const brandRows=['hyosung','wincor','ncr'].map(b=>[USAGE_BRAND[b],searches.filter(e=>e.brand===b).length,views.filter(e=>e.brand===b).length].concat([searches.filter(e=>e.brand===b).length+views.filter(e=>e.brand===b).length]));
+  body.innerHTML=
+    `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px">${card('FSE aktif',users)}${card('Pencarian',searches.length)}${card('Analisa Smart',smart.length)}${card('Download',dl.length)}</div>`+
+    usageTable('Pencarian error code per merek',brandRows.map(r=>[r[0],r[1],r[2],r[3]]),['Merek','Pencarian','Detail dibuka','Total'])+
+    usageTable('Penggunaan per FSE (semua aktivitas)',usageCount(ev,e=>e.email||'(tanpa email)'),['Email FSE','Aktivitas'],20)+
+    usageTable('Kode error paling sering dibuka',usageCount(views,e=>`${USAGE_BRAND[e.brand]||e.brand} ${e.module||''} · ${e.query}`),['Merek / modul · kode','Dibuka'],20)+
+    usageTable('Kata kunci paling sering dicari',usageCount(searches,e=>`${USAGE_BRAND[e.brand]||e.brand} · ${e.query}`),['Merek · kata kunci','Dicari'],20)+
+    usageTable('Pencarian Hyosung tanpa hasil (kode belum ada di database)',usageCount(searches.filter(e=>e.results===0),e=>`${e.module||''} · ${e.query}`),['Modul · kata kunci','Kali dicari'],20)+
+    usageTable('Pemakaian Smart Analyzer per FSE',usageCount(smart,e=>e.email||'(tanpa email)'),['Email FSE','Analisa'],15)+
+    usageTable('Smart Analyzer per jenis mesin',usageCount(smart,e=>e.module),['Modul','Analisa'],10)+
+    usageTable('Download per kategori',usageCount(dl,e=>(USAGE_CAT[e.category]||e.category||'-')+(e.bank?' · '+e.bank:'')),['Kategori','Download'],15)+
+    usageTable('File paling sering di-download',usageCount(dl,e=>e.fileTitle||'-'),['File','Download'],20)+
+    usageTable('Aktivitas per hari',usageCount(ev,e=>e.day).sort((a,b)=>a[0]<b[0]?1:-1),['Tanggal','Aktivitas'],31);
+}
+function usageExportCsv(){
+  const ev=usageFiltered();
+  const cols=['day','email','type','brand','module','query','results','category','bank','fileTitle','mode'];
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  const lines=[cols.join(',')].concat(ev.map(e=>cols.map(c=>q(e[c])).join(',')));
+  const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`Laporan-Penggunaan-${document.getElementById('usageFrom').value}_${document.getElementById('usageTo').value}.csv`;
+  a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
 function setAdminPanelTab(tab){
   const content=document.getElementById('adminPanelContent');
   Array.from(content.children).forEach(section=>{
     if(section.id==='adminPanelTabs')return;
-    section.style.display=(tab==='portal')===(section.id==='portalAdminSection')?'':'none';
+    const isPortal=section.id==='portalAdminSection', isUsage=section.id==='usageReportSection';
+    const show = tab==='portal'?isPortal : tab==='usage'?isUsage : (!isPortal&&!isUsage);
+    section.style.display=show?'':'none';
   });
-  document.querySelectorAll('#adminPanelTabs .admin-section-tab').forEach((button,index)=>button.classList.toggle('active',(tab==='portal'&&index===0)||(tab==='errors'&&index===1)));
+  document.querySelectorAll('#adminPanelTabs .admin-section-tab').forEach((button,index)=>button.classList.toggle('active',(tab==='portal'&&index===0)||(tab==='errors'&&index===1)||(tab==='usage'&&index===2)));
+  if(tab==='usage'&&!document.getElementById('usageFrom').value) usageSetRange(7,true);
 }
 function openAdminPanel(){document.getElementById('adminPanelOvl').style.display='flex';setAdminPanelTab('portal');if(currentIsAdmin)renderPortalAdminFiles();}
 function closeAdminPanel(){document.getElementById('adminPanelOvl').style.display='none';}
