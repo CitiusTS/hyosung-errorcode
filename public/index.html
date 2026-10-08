@@ -386,6 +386,11 @@ mark{background:#FFF176;color:#E65100;border-radius:2px;padding:0 2px}
 /* ===== SMART PRINT-HISTORY ANALYZER ===== */
 .smart-card{display:flex;align-items:center;gap:16px;background:#fff;border:1px solid #D5DCEA;border-radius:10px;padding:18px 22px;cursor:pointer;max-width:420px;transition:all .15s}
 .smart-card:hover{border-color:#1565C0;box-shadow:0 4px 16px rgba(21,101,192,.12)}
+#brandCardsGrid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+#brandCardsGrid>.smart-card,#brandCardsGrid>.brand-choice-card{width:100%;max-width:none;min-width:0}
+.brand-choice-card{box-sizing:border-box}
+@media(max-width:900px){#brandCardsGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){#brandCardsGrid{grid-template-columns:minmax(0,1fr)}}
 .portal-category-btn,.portal-bank-btn,.portal-back-btn{padding:9px 16px;border:1px solid #A8B8E8;border-radius:6px;background:#fff;color:#1A1F36;font:600 12px var(--ui-font);cursor:pointer;transition:all .15s}
 .portal-category-btn{min-width:160px;min-height:82px;text-align:left;font-size:16px;font-weight:700;border-left:4px solid #1565C0}
 .portal-category-btn:hover,.portal-bank-btn:hover,.portal-back-btn:hover{border-color:#1565C0;color:#1565C0;background:#E3EEFF}
@@ -533,7 +538,7 @@ mark{background:#FFF176;color:#E65100;border-radius:2px;padding:0 2px}
   <div id="lainnyaBrandList">
     <div style="font-size:20px;font-weight:700;color:#1B2A4A;margin-bottom:4px">Pilih Brand ATM</div>
     <div style="font-size:13px;color:#5F6B7A;margin-bottom:20px">Referensi error code untuk merk ATM selain Hyosung</div>
-    <div style="display:flex;gap:16px;flex-wrap:wrap">
+    <div id="brandCardsGrid" style="display:flex;gap:16px;flex-wrap:wrap">
     <div class="smart-card" onclick="showSmartAnalyzer()">
       <div class="smart-icon">⌕</div>
       <div>
@@ -541,14 +546,14 @@ mark{background:#FFF176;color:#E65100;border-radius:2px;padding:0 2px}
         <div style="font-size:12.5px;color:#8A96B8;margin-top:2px">Analisa foto Print History BRM860, BRM50 &amp; modul lain</div>
       </div>
     </div>
-    <div onclick="showNcr()" style="display:flex;align-items:center;gap:16px;background:#fff;border:1px solid #D5DCEA;border-radius:12px;padding:20px 24px;cursor:pointer;max-width:420px;transition:all .15s;box-shadow:0 2px 8px rgba(0,0,0,.06)" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='0 2px 8px rgba(0,0,0,.06)'">
+    <div class="brand-choice-card" onclick="showNcr()" style="display:flex;align-items:center;gap:16px;background:#fff;border:1px solid #D5DCEA;border-radius:12px;padding:20px 24px;cursor:pointer;max-width:420px;transition:all .15s;box-shadow:0 2px 8px rgba(0,0,0,.06)" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='0 2px 8px rgba(0,0,0,.06)'">
       <div style="width:52px;height:52px;background:#1F3864;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#fff;flex-shrink:0">N</div>
       <div>
         <div style="font-weight:700;font-size:15px;color:#1B2A4A">NCR</div>
         <div style="font-size:12.5px;color:#8A96B8;margin-top:2px">ATM M-Status Checker — S1 Dispenser & Card Reader</div>
       </div>
     </div>
-    <div onclick="showWincor()" style="display:flex;align-items:center;gap:16px;background:#fff;border:1px solid #D5DCEA;border-radius:12px;padding:20px 24px;cursor:pointer;max-width:420px;transition:all .15s;box-shadow:0 2px 8px rgba(0,0,0,.06)" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='0 2px 8px rgba(0,0,0,.06)'">
+    <div class="brand-choice-card" onclick="showWincor()" style="display:flex;align-items:center;gap:16px;background:#fff;border:1px solid #D5DCEA;border-radius:12px;padding:20px 24px;cursor:pointer;max-width:420px;transition:all .15s;box-shadow:0 2px 8px rgba(0,0,0,.06)" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow='0 2px 8px rgba(0,0,0,.06)'">
       <div style="width:52px;height:52px;background:#E4002B;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#fff;flex-shrink:0">W</div>
       <div>
         <div style="font-weight:700;font-size:15px;color:#1B2A4A">WINCOR</div>
