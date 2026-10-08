@@ -2882,7 +2882,7 @@ doFilter();
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-  import { getFirestore, collection, doc, setDoc, getDocs, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, getDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
   // >>> GANTI dengan firebaseConfig dari Firebase Console (Project Settings > General > Your apps) <<<
   const firebaseConfig = {
@@ -2904,6 +2904,13 @@ doFilter();
     signIn: (email, pass) => signInWithEmailAndPassword(fbAuth, email, pass),
     onAuthChange: (cb) => onAuthStateChanged(fbAuth, cb),
     signOut: () => signOut(fbAuth),
+    claimUserDeviceSession: (uid, sessionId) => setDoc(doc(fbDb, 'user_device_sessions', uid), {
+      sessionId,
+      updatedAt: new Date().toISOString()
+    }),
+    watchUserDeviceSession: (uid, onChange, onError) => onSnapshot(doc(fbDb, 'user_device_sessions', uid), snap => {
+      onChange(snap.exists() ? snap.data() : null);
+    }, onError),
     docRef: (mod, k) => doc(fbDb, 'errorcodes_overlay', mod, 'records', k),
     setDoc,
     getAiConfig: async () => {
@@ -3208,15 +3215,58 @@ let adminMode = 'add';
 let editIdx = -1;
 let currentUser = null;
 let currentIsAdmin = false;
+let deviceSessionUnsubscribe = null;
+let authGateMessage = '';
+const TECH_DEVICE_ID_KEY = 'citius_tech_device_id';
+
+function techGetDeviceId(){
+  let deviceId=localStorage.getItem(TECH_DEVICE_ID_KEY);
+  if(!deviceId){
+    deviceId=window.crypto?.randomUUID?window.crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(TECH_DEVICE_ID_KEY,deviceId);
+  }
+  return deviceId;
+}
 
 window.addEventListener('fb-ready', function(){
   syncFirestoreOverlay();
   window.__fb.onAuthChange(async function(user){
+    if(deviceSessionUnsubscribe){
+      deviceSessionUnsubscribe();
+      deviceSessionUnsubscribe=null;
+    }
     currentUser = user;
     const gate = document.getElementById('techLoginOvl');
     if(user){
-      gate.style.display = 'none';
+      gate.style.display = 'flex';
       currentIsAdmin = await window.__fb.isAdmin(user.uid);
+      if(currentUser?.uid!==user.uid)return;
+      if(!currentIsAdmin){
+        try{
+          const deviceId=techGetDeviceId();
+          await window.__fb.claimUserDeviceSession(user.uid,deviceId);
+          if(currentUser?.uid!==user.uid)return;
+          deviceSessionUnsubscribe=window.__fb.watchUserDeviceSession(user.uid,session=>{
+            if(session?.sessionId!==deviceId&&currentUser?.uid===user.uid){
+              authGateMessage='❌ Akun ini telah digunakan di perangkat lain. Perangkat ini otomatis dikeluarkan.';
+              window.__fb.signOut().catch(error=>console.warn('Gagal mengeluarkan sesi perangkat lama:',error));
+            }
+          },error=>{
+            if(currentUser?.uid!==user.uid)return;
+            console.warn('Gagal memantau sesi perangkat:',error);
+            authGateMessage='❌ Sesi perangkat tidak dapat diverifikasi. Periksa koneksi atau hubungi admin.';
+            window.__fb.signOut().catch(signOutError=>console.warn('Gagal menutup sesi yang tidak dapat diverifikasi:',signOutError));
+          });
+        }catch(error){
+          console.warn('Gagal mendaftarkan sesi perangkat:',error);
+          authGateMessage='❌ Login perangkat tunggal gagal diverifikasi. Hubungi admin untuk memeriksa aturan akses Firebase.';
+          await window.__fb.signOut().catch(signOutError=>console.warn('Gagal menutup login tanpa sesi terverifikasi:',signOutError));
+          return;
+        }
+        if(currentUser?.uid!==user.uid)return;
+      }
+      authGateMessage='';
+      gate.style.display = 'none';
       const logoutBtn = document.getElementById('techLogoutBtn');
       if(logoutBtn){
         logoutBtn.style.display = 'inline-flex';
@@ -3229,7 +3279,13 @@ window.addEventListener('fb-ready', function(){
       if(logoutBtn) logoutBtn.style.display = 'none';
       document.getElementById('techEmailInput').value = '';
       document.getElementById('techPassInput').value = '';
-      document.getElementById('techLoginErr').style.display = 'none';
+      const errEl=document.getElementById('techLoginErr');
+      if(authGateMessage){
+        errEl.textContent=authGateMessage;
+        errEl.style.display='block';
+      }else{
+        errEl.style.display = 'none';
+      }
       setTimeout(function(){document.getElementById('techEmailInput').focus();},100);
     }
   });
@@ -3246,6 +3302,7 @@ async function techLogin(){
     return;
   }
   btn.textContent = 'Memeriksa...'; btn.disabled = true;
+  authGateMessage='';
   try{
     await window.__fb.signIn(email, pass);
     errEl.style.display = 'none';
