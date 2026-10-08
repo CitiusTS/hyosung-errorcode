@@ -2929,7 +2929,7 @@ doFilter();
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-  import { getFirestore, collection, doc, setDoc, getDocs, getDoc, deleteDoc, onSnapshot, addDoc, serverTimestamp, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, getDoc, deleteDoc, onSnapshot, addDoc, serverTimestamp, query, where, orderBy, limit, startAfter } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
   // >>> GANTI dengan firebaseConfig dari Firebase Console (Project Settings > General > Your apps) <<<
   const firebaseConfig = {
@@ -2996,10 +2996,21 @@ doFilter();
         uid: u.uid, email: u.email || '', day: wib, ts: serverTimestamp()
       })).catch(() => {});   // gagal log tidak boleh mengganggu FSE
     },
-    getUsage: async (fromDay, toDay) => {
-      const q = query(collection(fbDb, 'usage_events'),
-        where('day', '>=', fromDay), where('day', '<=', toDay), orderBy('day'), limit(20000));
-      return (await getDocs(q)).docs.map(d => d.data());
+    getUsage: async (fromDay, toDay, maxTotal) => {
+      // Firestore membatasi 10.000 dokumen per query -> ambil per halaman 5.000
+      maxTotal = maxTotal || 100000;
+      const out = []; let last = null;
+      while (out.length < maxTotal) {
+        const parts = [collection(fbDb, 'usage_events'),
+          where('day', '>=', fromDay), where('day', '<=', toDay), orderBy('day')];
+        if (last) parts.push(startAfter(last));
+        parts.push(limit(5000));
+        const snap = await getDocs(query.apply(null, parts));
+        snap.docs.forEach(d => out.push(d.data()));
+        if (snap.docs.length < 5000) break;
+        last = snap.docs[snap.docs.length - 1];
+      }
+      return out;
     }
   };
 
@@ -3474,7 +3485,7 @@ async function usageLoadReport(){
   btn.disabled=true; status.textContent='Memuat data penggunaan...';
   try{
     usageEvents=await window.__fb.getUsage(from,to);
-    status.textContent=`${usageEvents.length.toLocaleString('id')} aktivitas dari ${from} sampai ${to}`+(usageEvents.length>=20000?' (dibatasi 20.000 data pertama; persempit rentang tanggal)':'');
+    status.textContent=`${usageEvents.length.toLocaleString('id')} aktivitas dari ${from} sampai ${to}`+(usageEvents.length>=100000?' (dibatasi 100.000 data pertama; persempit rentang tanggal)':'');
     document.getElementById('usageCsvBtn').style.display=usageEvents.length?'':'none';
     usageRender();
   }catch(error){
