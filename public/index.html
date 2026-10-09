@@ -3083,7 +3083,7 @@ doFilter();
           <button type="button" class="usage-btn" onclick="usageSetRange(7)">7 hari</button>
           <button type="button" class="usage-btn" onclick="usageSetRange(30)">30 hari</button>
           <button type="button" class="usage-btn usage-primary" id="usageLoadBtn" onclick="usageLoadReport()">Muat Laporan</button>
-          <button type="button" class="usage-btn usage-primary" id="usageXlsBtn" onclick="usageExportExcel()" style="display:none">⬇ Ekspor Excel (Laporan Resmi)</button>
+          <button type="button" class="usage-btn usage-primary" id="usageXlsBtn" onclick="usageExportExcel()" style="display:none">⬇ Ekspor Excel</button>
           <button type="button" class="usage-btn" id="usageCsvBtn" onclick="usageExportCsv()" style="display:none">⬇ CSV</button>
         </div>
         <div style="margin-bottom:8px"><input id="usageEmailFilter" type="search" placeholder="Filter email FSE (opsional)..." oninput="usageRender()" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid #A8B8E8;border-radius:6px;font:inherit"></div>
@@ -3585,7 +3585,7 @@ function usageRender(){
 }
 
 // ===== EKSPOR EXCEL LAPORAN RESMI =====
-const USAGE_ORG='PROJECT CITIUS - TECHNICAL SUPPORT & IT';
+const USAGE_ORG='PT. Citius Solusi Indonesia - TECHNICAL SUPPORT ';
 const USAGE_DOC_TITLE='LAPORAN PENGGUNAAN APLIKASI ERROR CODE & SMART ANALYZER';
 function usageExportExcel(){
   const ev=usageFiltered();
