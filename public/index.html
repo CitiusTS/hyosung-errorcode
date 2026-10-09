@@ -878,15 +878,19 @@ function portalChangeFilePage(offset){
 function portalDownloadUrl(value){
   try{
     const url=new URL(value);
-    if(url.protocol!=='https:'||!['drive.google.com','docs.google.com'].includes(url.hostname))return '';
-    const fileId=url.pathname.match(/\/file\/d\/([^/]+)/)?.[1]||url.searchParams.get('id');
-    return fileId?'https://drive.google.com/uc?export=download&id='+encodeURIComponent(fileId):url.href;
-  }catch(error){return value;}
+    if(!['https:','http:'].includes(url.protocol))return '';
+    if(['drive.google.com','docs.google.com'].includes(url.hostname)){
+      const fileId=url.pathname.match(/\/file\/d\/([^/]+)/)?.[1]||url.searchParams.get('id');
+      return fileId?'https://drive.google.com/uc?export=download&id='+encodeURIComponent(fileId):url.href;
+    }
+    if(/(^|\.)dropbox\.com$/.test(url.hostname)){url.searchParams.set('dl','1');return url.href;} // Dropbox: paksa unduh langsung
+    return url.href; // link lain (OneDrive, MediaFire, server sendiri, dll) dipakai apa adanya
+  }catch(error){return '';}
 }
 function portalSafeDriveUrl(value){
   try{
     const url=new URL(value);
-    return url.protocol==='https:'&&['drive.google.com','docs.google.com'].includes(url.hostname)?url.href:'';
+    return ['https:','http:'].includes(url.protocol)?url.href:''; // hanya http/https; javascript:, data:, dll ditolak
   }catch(error){return '';}
 }
 function togglePortalAdminBank(){
@@ -950,12 +954,12 @@ async function savePortalFile(){
   const title=document.getElementById('portalAdminTitle').value.trim();
   const description=document.getElementById('portalAdminDescription').value.trim();
   const urlValue=document.getElementById('portalAdminUrl').value.trim();
-  if(!title||!urlValue){status.textContent='Judul dan link Google Drive wajib diisi.';return;}
+  if(!title||!urlValue){status.textContent='Judul dan link download wajib diisi.';return;}
   if(category==='modul-atm'&&!bank){status.textContent='Pilih kategori Modul ATM terlebih dahulu.';return;}
   let url;
   try{url=new URL(urlValue);}catch(error){status.textContent='Link tidak valid.';return;}
-  if(url.protocol!=='https:'||!['drive.google.com','docs.google.com'].includes(url.hostname)){
-    status.textContent='Gunakan link HTTPS dari drive.google.com atau docs.google.com.';
+  if(!['https:','http:'].includes(url.protocol)){
+    status.textContent='Link harus diawali http:// atau https://';
     return;
   }
   const id=portalEditingId||(crypto.randomUUID?crypto.randomUUID():'file-'+Date.now()+'-'+Math.random().toString(36).slice(2));
@@ -3120,8 +3124,8 @@ doFilter();
         <label style="display:block;font-size:11px;font-weight:600;color:#4A5680;margin-bottom:10px">Deskripsi
           <textarea id="portalAdminDescription" maxlength="1000" rows="2" style="display:block;width:100%;margin-top:4px;padding:9px;border:1px solid #A8B8E8;border-radius:6px;font:inherit;resize:vertical"></textarea>
         </label>
-        <label style="display:block;font-size:11px;font-weight:600;color:#4A5680;margin-bottom:10px">Link Google Drive *
-          <input id="portalAdminUrl" type="url" placeholder="https://drive.google.com/..." style="display:block;width:100%;margin-top:4px;padding:9px;border:1px solid #A8B8E8;border-radius:6px;font:inherit">
+        <label style="display:block;font-size:11px;font-weight:600;color:#4A5680;margin-bottom:10px">Link Download * <span style="font-weight:400;color:#8A96B8">(Google Drive, OneDrive, Dropbox, MediaFire, atau link lain)</span>
+          <input id="portalAdminUrl" type="url" placeholder="https://..." style="display:block;width:100%;margin-top:4px;padding:9px;border:1px solid #A8B8E8;border-radius:6px;font:inherit">
         </label>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button type="button" onclick="savePortalFile()" id="portalAdminSaveBtn" style="padding:9px 16px;border:0;border-radius:6px;background:#1B7F3A;color:#fff;font-weight:700;cursor:pointer">Simpan File</button>
