@@ -397,6 +397,27 @@ mark{background:#FFF176;color:#E65100;border-radius:2px;padding:0 2px}
 .portal-file{padding:14px 16px;margin-bottom:8px;background:#fff;border:1px solid #D5DCEA;border-radius:8px}
 .portal-file h3{font-size:14px;color:#1A1F36;margin:0 0 4px}
 .portal-file p{font-size:12px;color:#5F6B7A;white-space:pre-wrap;margin:0 0 10px}
+
+/* ===== Portal TS: daftar file (rapi di desktop & mobile) ===== */
+.portal-file-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 16px;margin-bottom:8px;background:#fff;border:1px solid #D5DCEA;border-radius:10px;box-sizing:border-box;max-width:100%}
+.portal-file-main{flex:1 1 auto;min-width:0}
+.portal-file-title{font-size:14px;font-weight:700;color:#1A1F36;line-height:1.35;overflow-wrap:anywhere;word-break:break-word}
+.portal-file-desc{font-size:12px;color:#5F6B7A;margin-top:4px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
+.portal-file-btn{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:116px;padding:9px 14px;border-radius:7px;background:#1565C0;color:#fff;text-decoration:none;font-size:12px;font-weight:700;white-space:nowrap;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+.portal-file-btn:hover,.portal-file-btn:active{background:#0D47A1}
+@media(max-width:600px){
+  .portal-file-row{flex-direction:column;align-items:stretch;gap:10px;padding:12px}
+  .portal-file-title{font-size:14px}
+  .portal-file-btn{width:100%;min-height:42px;font-size:13px}
+  .portal-list-controls{display:grid;grid-template-columns:1fr auto;gap:8px 10px;align-items:center}
+  .portal-list-controls input{grid-column:1 / -1;min-width:0;width:100%;box-sizing:border-box}
+  .portal-list-controls label{grid-column:1;font-size:12px}
+  .portal-list-controls select{grid-column:2;min-width:84px}
+  .portal-list-controls .portal-list-meta{grid-column:1 / -1}
+  .portal-pagination{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .portal-pagination .portal-list-meta{grid-column:1 / -1;order:-1;text-align:center}
+  .portal-pagination button{width:100%;min-height:40px}
+}
 .portal-download{display:inline-flex;padding:8px 12px;border-radius:6px;background:#1565C0;color:#fff;text-decoration:none;font-size:12px;font-weight:700}
 .portal-download:hover{background:#0D47A1}
 .portal-list-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0}
@@ -828,14 +849,15 @@ function portalRenderFileRows(files){
   }
   files.forEach(file=>{
     const row=document.createElement('article');
-    row.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 16px;margin-bottom:8px;background:#fff;border:1px solid #D5DCEA;border-radius:8px';
+    row.className='portal-file-row';
     const details=document.createElement('div');
+    details.className='portal-file-main';
     const title=document.createElement('div');
     title.textContent=file.title||'File tanpa judul';
-    title.style.cssText='font-size:14px;font-weight:700;color:#1A1F36';
+    title.className='portal-file-title';
     const description=document.createElement('div');
     description.textContent=file.description||'Tidak ada deskripsi.';
-    description.style.cssText='font-size:12px;color:#5F6B7A;margin-top:4px;white-space:pre-wrap';
+    description.className='portal-file-desc';
     details.append(title,description);
     const safeUrl=portalSafeDriveUrl(file.url||'');
     if(safeUrl){
@@ -845,7 +867,7 @@ function portalRenderFileRows(files){
       link.rel='noopener noreferrer';
       link.addEventListener('click',()=>usageLog({type:'download',brand:'portal',category:portalCategory,bank:portalBank||'',fileId:file.id||'',fileTitle:String(file.title||'').slice(0,120)}));
       link.textContent='⬇ Download';
-      link.style.cssText='flex-shrink:0;padding:8px 12px;border-radius:6px;background:#1565C0;color:#fff;text-decoration:none;font-size:12px;font-weight:700';
+      link.className='portal-file-btn';
       row.append(details,link);
     }else row.append(details);
     list.append(row);
